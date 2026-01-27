@@ -583,24 +583,25 @@ bool GPIOController::setGravity(const ur_msgs::srv::SetGravity::Request::SharedP
   const std::string base_frame_name = params_.tf_prefix + "base_link";
   geometry_msgs::msg::TransformStamped tf_to_base_link;
   try {
-    tf_to_base_link =
-        tf_buffer_->lookupTransform(base_frame_name, req->gravity.header.frame_id, tf2::TimePointZero);
+    tf_to_base_link = tf_buffer_->lookupTransform(base_frame_name, req->gravity.header.frame_id, tf2::TimePointZero);
   } catch (const tf2::TransformException& ex) {
     resp->success = false;
     resp->status = ex.what();
     return false;
   }
 
-  // Transform the gravity vector
-  geometry_msgs::msg::Vector3 transformed_gravity;
-  tf2::doTransform(req->gravity.vector, transformed_gravity, tf_to_base_link);
+  // Rotate the gravity vector
+  tf2::Vector3 raw_gravity(req->gravity.vector.x, req->gravity.vector.y, req->gravity.vector.z);
+  tf2::Quaternion quat;
+  tf2::fromMsg(tf_to_base_link.transform.rotation, quat);
+  tf2::Vector3 transformed_gravity = tf2::quatRotate(quat, raw_gravity);
 
   // reset success flag
   std::ignore = command_interfaces_[CommandInterfaces::GRAVITY_ASYNC_SUCCESS].set_value(ASYNC_WAITING);
 
-  std::ignore = command_interfaces_[CommandInterfaces::GRAVITY_X].set_value(transformed_gravity.x);
-  std::ignore = command_interfaces_[CommandInterfaces::GRAVITY_Y].set_value(transformed_gravity.y);
-  std::ignore = command_interfaces_[CommandInterfaces::GRAVITY_Z].set_value(transformed_gravity.z);
+  std::ignore = command_interfaces_[CommandInterfaces::GRAVITY_X].set_value(transformed_gravity.x());
+  std::ignore = command_interfaces_[CommandInterfaces::GRAVITY_Y].set_value(transformed_gravity.y());
+  std::ignore = command_interfaces_[CommandInterfaces::GRAVITY_Z].set_value(transformed_gravity.z());
 
   if (!waitForAsyncCommand([&]() {
         return command_interfaces_[CommandInterfaces::GRAVITY_ASYNC_SUCCESS].get_optional().value_or(ASYNC_WAITING);
