@@ -524,6 +524,8 @@ URPositionHardwareInterface::on_configure(const rclcpp_lifecycle::State& previou
   // versions fall back to the currents, instead.
   use_currents_as_efforts_ = ((info_.hardware_parameters["use_currents_as_efforts"] == "true") ||
                               (info_.hardware_parameters["use_currents_as_efforts"] == "True"));
+  use_friction_compensation_ = ((info_.hardware_parameters["use_friction_compensation"] == "true") ||
+                                (info_.hardware_parameters["use_friction_compensation"] == "True"));
 
   // The ip address of the host the driver runs on
   std::string reverse_ip = info_.hardware_parameters["reverse_ip"];
@@ -685,6 +687,15 @@ URPositionHardwareInterface::on_configure(const rclcpp_lifecycle::State& previou
                    "Driver configured to use actual torques as efforts, which is not supported by this software "
                    "version %s. Please use version 5.23.0 / 10.11.0 or newer for this feature.",
                    version_info_.toString().c_str());
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+  }
+
+  if (use_friction_compensation_) {
+    if ((version_info_.major == 5 && version_info_.minor < 23) ||
+    (version_info_.major == 10 && version_info_.minor < 10) || version_info_.major < 5) {
+      RCLCPP_ERROR(get_logger(), "Requested to use friction compensation on a robot version that doesn't support it. Torque "
+      "control is available from robot software 5.23.0 / 10.10.0 on.");
       return hardware_interface::CallbackReturn::ERROR;
     }
   }
@@ -1053,6 +1064,15 @@ void URPositionHardwareInterface::checkAsyncIO()
         ur_driver_->writeFreedriveControlMessage(urcl::control::FreedriveControlMessage::FREEDRIVE_STOP);
     freedrive_activated_ = false;
     freedrive_mode_abort_ = NO_NEW_CMD_;
+  }
+
+  if (use_friction_compensation_ && robot_program_running_ && ur_driver_ != nullptr) {
+    // Set friction
+    if (!ur_driver_->setFrictionCompensation(use_friction_compensation_)) {
+      RCLCPP_ERROR(get_logger(), "Failed to set friction compensation");
+    } else {
+      use_friction_compensation_ = false;
+    }
   }
 }
 

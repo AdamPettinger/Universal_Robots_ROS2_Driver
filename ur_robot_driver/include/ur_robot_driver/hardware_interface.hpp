@@ -330,6 +330,7 @@ protected:
   std::unordered_map<std::string, std::unordered_map<std::string, bool>> mode_compatibility_;
 
   bool use_currents_as_efforts_ = false;
+  bool use_friction_compensation_ = false;
 };
 }  // namespace ur_robot_driver
 
